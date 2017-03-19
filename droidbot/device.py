@@ -6,10 +6,12 @@ import time
 
 from app import App
 from intent import Intent
+from imusim.all import *
 
 DEFAULT_NUM = '1234567890'
 DEFAULT_CONTENT = 'Hello world!'
-
+TRAJ_DEFINED =3.8
+SAMP_PERIOD=0.1
 
 class Device(object):
     """
@@ -57,6 +59,8 @@ class Device(object):
             self.monkeyrunner_enabled = False
             self.view_client_enabled = True
 
+        self.imu = None
+        self.imu_count = 0
         self.is_connected = False
         self.connect()
         self.get_sdk_version()
@@ -69,6 +73,7 @@ class Device(object):
         self.state_monitor = StateMonitor(device=self)
         self.state_monitor.start()
         self.unlock()
+        self.setup_sensors()
         # assert self.display_info is not None
         # self.check_connectivity()
         # print self.is_emulator, self.host, self.port
@@ -404,6 +409,37 @@ class Device(object):
         assert self.get_telnet() is not None
         return self.get_telnet().run_cmd("sms send %s '%s'" % (phone, content))
 
+    def take_photo(self):
+        photo_intent = Intent(prefix='start', action="android.media.action.IMAGE_CAPTURE")
+        print 'making photo'
+        self.send_intent(intent=photo_intent)
+        time.sleep(2)
+        self.get_adb().press('27')
+        time.sleep(2)
+        self.get_adb().press("3")
+        return True
+
+    def setup_sensors(self):
+        from random import uniform
+        samplingPeriod = 0.01
+        imu = Orient3IMU()
+        env = Environment()
+        samples = 1000
+        rotationalVelocity = 20
+        calibrator = ScaleAndOffsetCalibrator(env, samples, samplingPeriod, rotationalVelocity)
+        calibration = calibrator.calibrate(imu)
+        model = loadBVHFile('walk.bvh', CM_TO_M_CONVERSION)
+        splinedModel = SplinedBodyModel(model)
+        sim = Simulation(environment=env)
+        imu.simulation = sim
+        imu.trajectory = splinedModel.getJoint('rfemur')
+        sim.time = splinedModel.startTime + uniform(0.01, 0.05)
+        BasicIMUBehaviour(imu, samplingPeriod, calibration, initialTime=sim.time)
+        sim.run(splinedModel.endTime)
+        self.imu = imu
+        self.imu_count = sim.time
+
+
     def set_gps(self, x, y):
         """
         set GPS positioning to x,y
@@ -412,7 +448,13 @@ class Device(object):
         :return:
         """
         assert self.get_telnet() is not None
-        return self.get_telnet().run_cmd("geo fix %s %s" % (x, y))
+        self.get_telnet().run_cmd("geo fix %s %s" % (x, y))
+        acc_data = self.imu.trajectory.acceleration(self.imu_count)
+        self.get_telnet().run_cmd("sensor set acceleration %s:%s:%s" % (acc_data[0][0], acc_data[1][0], acc_data[2][0]))
+        self.imu_count += SAMP_PERIOD
+        self.imu_count %= TRAJ_DEFINED
+
+        #self.get_telnet().run_cmd("sensor set magnetic-field %s:%s:%s" % (x, y, z))
 
     def set_continuous_gps(self, center_x, center_y, delta_x, delta_y):
         import threading
@@ -436,7 +478,44 @@ class Device(object):
             x = random.random() * delta_x * 2 + center_x - delta_x
             y = random.random() * delta_y * 2 + center_y - delta_y
             self.set_gps(x, y)
-            time.sleep(3)
+            time.sleep(1)
+
+    def set_continious_longsensors(self):
+        import threading
+        print 'starting'
+        gps_thread = threading.Thread(
+            target=self.set_continious_longsensors_blocked())
+        gps_thread.start()
+        return True
+
+    def set_continious_longsensors_blocked(self):
+        from random import randrange, random
+        import time
+        current_capacity = 50
+        charging = 1
+        print 'here'
+        while self.is_connected:
+            if current_capacity > 96:
+                charging = -1
+            if current_capacity < 5:
+                charging = 1
+            current_capacity += charging * randrange(1, 5)
+            pressure = 1013 + random()
+            self.set_long_sensors(current_capacity, randrange(0, 200),
+                                      randrange(-10, 20), pressure, randrange(60, 90))
+            print 'changed'
+            for _ in range(100):
+                time.sleep(5)
+                if not self.is_connected:
+                    return
+
+    def set_long_sensors(self, battery, light, temp, pressure, hum):
+        assert self.get_telnet() is not None
+        self.get_telnet().run_cmd("power capacity %s" % battery)
+        self.get_telnet().run_cmd("sensor set light %s" % light)
+        self.get_telnet().run_cmd("sensor set temperature %s" % temp)
+        self.get_telnet().run_cmd("sensor set pressure %s" % pressure)
+        self.get_telnet().run_cmd("sensor set humidity %s" % hum)
 
     def get_settings(self):
         """
@@ -490,6 +569,7 @@ class Device(object):
         assert intent is not None
         if isinstance(intent, Intent):
             cmd = intent.get_cmd()
+            print cmd
         else:
             cmd = intent
         return self.get_adb().shell(cmd)

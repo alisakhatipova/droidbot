@@ -5,6 +5,8 @@
 # The environment should be determined before app start running.
 # We don't need to set up all environment aspects for one app,
 # instead we select a subset according to static analysis result of app.
+from random import randint, choice, randrange
+import string
 import logging
 import json
 import time
@@ -16,7 +18,7 @@ ENV_POLICIES = [
     "static",
     "file",
 ]
-
+GEN_NUM = 5
 
 class UnknownEnvException(Exception):
     pass
@@ -83,6 +85,13 @@ class ContactAppEnv(StaticAppEnv):
         contact_data.pop('env_type')
         return device.add_contact(contact_data)
 
+def generate_contact_app_env():
+    phone = ''.join(str(randint(0, 9)) for i in range(randint(7, 15)))
+    name = ''.join(choice(string.letters + ' ') for _ in range(randint(5, 20)))
+    options = ['@gmail.com', '@hotmail.com', '@rambler.com']
+    email = ''.join(choice(string.ascii_lowercase + string.digits) for _ in range(randint(5, 15))) \
+            + options[randrange(len(options))]
+    return ContactAppEnv(name, phone, email)
 
 class SettingsAppEnv(StaticAppEnv):
     """
@@ -146,6 +155,13 @@ class CallLogEnv(StaticAppEnv):
         time.sleep(2)
         return device.cancel_call(self.phone)
 
+def generate_call_log_env():
+    phone = ''.join(str(randint(0, 9)) for i in range(randint(7, 15)))
+    options = [True, False]
+    call_in = options[randint(0,1)]
+    accepted = options[randint(0,1)]
+    return CallLogEnv(phone, call_in, accepted)
+
 
 class DummyFilesEnv(StaticAppEnv):
     """
@@ -164,6 +180,13 @@ class DummyFilesEnv(StaticAppEnv):
 
     def deploy(self, device):
         device.push_file(self.dummy_files_dir)
+
+def generate_sms_log_env():
+    phone = ''.join(str(randint(0,9)) for i in range(randint(7, 15)))
+    options = [True, False]
+    sms_in = options[randint(0,1)]
+    content = ''.join(choice(string.letters + string.digits) for _ in range(randint(2, 60)))
+    return SMSLogEnv(phone, sms_in, content)
 
 
 class SMSLogEnv(StaticAppEnv):
@@ -192,6 +215,30 @@ class SMSLogEnv(StaticAppEnv):
         else:
             return device.send_sms(self.phone, self.content)
 
+class ImageEnv(StaticAppEnv):
+    def __init__(self, env_dict=None):
+        print 'created IMAGE'
+        self.env_type = 'images'
+    def deploy(self, device):
+        print 'START DEPLOYMENT'
+        return device.take_photo()
+
+def generate_image_env():
+    return ImageEnv()
+
+
+class BatteryAppEnv(DynamicAppEnv):
+    """
+    This class describes the continuous updating battery capacity inside device
+    """
+    def __init__(self, env_dict=None):
+        if env_dict is not None:
+            self.__dict__ = env_dict
+            return
+        self.env_type = 'battery'
+
+    def deploy(self, device):
+        return device.set_continious_longsensors()
 
 class GPSAppEnv(DynamicAppEnv):
     """
@@ -320,7 +367,17 @@ class DummyEnvFactory(AppEnvFactory):
         """
         produce a list of dummy environment
         """
-        envs = [ContactAppEnv(), SettingsAppEnv(), CallLogEnv(), SMSLogEnv(), GPSAppEnv(), DummyFilesEnv()]
+        envs =[]
+        #envs = [ContactAppEnv(), SettingsAppEnv(), CallLogEnv(), SMSLogEnv(), GPSAppEnv(), DummyFilesEnv(), BatteryAppEnv()]
+        # for _ in range(randrange(GEN_NUM)):
+        #     envs.append(generate_call_log_env())
+        # for _ in range(randrange(GEN_NUM)):
+        #     envs.append(generate_contact_app_env())
+        # for _ in range(randrange(3, GEN_NUM)):
+        #     envs.append(generate_sms_log_env())
+        for _ in range(4):
+            print 'added images'
+            envs.append(generate_image_env())
         return envs
 
 
@@ -357,6 +414,7 @@ class StaticEnvFactory(AppEnvFactory):
             'android.permission.WRITE_EXTERNAL_STORAGE' in permissions or \
             'android.permission.MOUNT_UNMOUNT_FILESYSTEMS' in permissions:
             envs.append(DummyFilesEnv())
+            envs.append(generate_image_env())
 
         # TODO add more app-specific app environment
         return envs
