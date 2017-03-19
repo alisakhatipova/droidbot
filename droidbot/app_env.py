@@ -368,13 +368,13 @@ class DummyEnvFactory(AppEnvFactory):
         produce a list of dummy environment
         """
         envs =[]
-        #envs = [ContactAppEnv(), SettingsAppEnv(), CallLogEnv(), SMSLogEnv(), GPSAppEnv(), DummyFilesEnv(), BatteryAppEnv()]
-        # for _ in range(randrange(GEN_NUM)):
-        #     envs.append(generate_call_log_env())
-        # for _ in range(randrange(GEN_NUM)):
-        #     envs.append(generate_contact_app_env())
-        # for _ in range(randrange(3, GEN_NUM)):
-        #     envs.append(generate_sms_log_env())
+        envs = [ContactAppEnv(), SettingsAppEnv(), CallLogEnv(), SMSLogEnv(), GPSAppEnv(), DummyFilesEnv(), BatteryAppEnv()]
+        for _ in range(randrange(GEN_NUM)):
+            envs.append(generate_call_log_env())
+        for _ in range(randrange(GEN_NUM)):
+            envs.append(generate_contact_app_env())
+        for _ in range(randrange(3, GEN_NUM)):
+            envs.append(generate_sms_log_env())
         for _ in range(4):
             print 'added images'
             envs.append(generate_image_env())
