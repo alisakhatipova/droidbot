@@ -18,7 +18,7 @@ ENV_POLICIES = [
     "static",
     "file",
 ]
-GEN_NUM = 5
+GEN_NUM = 30
 
 class UnknownEnvException(Exception):
     pass
@@ -312,6 +312,8 @@ class AppEnvManager(object):
         deploy the environments to device (Emulator)
         :return:
         """
+	time1 = time.time()
+	print "START TIME IS", time1
         self.logger.info("start deploying environment, policy is %s" % self.policy)
         if self.env_factory is not None:
             self.envs = self.generate_from_factory(self.env_factory)
@@ -326,6 +328,7 @@ class AppEnvManager(object):
         self.dump(out_file)
         out_file.close()
         self.logger.debug("finish deploying environment, saved to droidbot_env.json")
+	print "TIME SPENT ", time.time() - time1
 
     def dump(self, env_file):
         """
@@ -367,16 +370,16 @@ class DummyEnvFactory(AppEnvFactory):
         """
         produce a list of dummy environment
         """
-        envs =[]
         envs = [ContactAppEnv(), SettingsAppEnv(), CallLogEnv(), SMSLogEnv(), GPSAppEnv(), DummyFilesEnv(), BatteryAppEnv()]
+        num = 0
+        print "DummyEnvFactory"
         for _ in range(randrange(GEN_NUM)):
             envs.append(generate_call_log_env())
         for _ in range(randrange(GEN_NUM)):
             envs.append(generate_contact_app_env())
         for _ in range(randrange(3, GEN_NUM)):
             envs.append(generate_sms_log_env())
-        for _ in range(4):
-            print 'added images'
+        for _ in range(randrange(3, GEN_NUM)):
             envs.append(generate_image_env())
         return envs
 

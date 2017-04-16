@@ -3,7 +3,7 @@ import os
 import re
 import subprocess
 import time
-
+import threading
 from app import App
 from intent import Intent
 from imusim.all import *
@@ -74,6 +74,9 @@ class Device(object):
         self.state_monitor.start()
         self.unlock()
         self.setup_sensors()
+        self.gps_bat = None
+        self.long_sens = None
+
         # assert self.display_info is not None
         # self.check_connectivity()
         # print self.is_emulator, self.host, self.port
@@ -185,6 +188,9 @@ class Device(object):
         if os.path.exists(temp_dir):
             import shutil
             shutil.rmtree(temp_dir)
+        self.gps_bat.join()
+        self.long_sens.join()
+
 
     def get_telnet(self):
         """
@@ -410,7 +416,7 @@ class Device(object):
         return self.get_telnet().run_cmd("sms send %s '%s'" % (phone, content))
 
     def take_photo(self):
-        photo_intent = Intent(prefix='start', action="android.media.action.IMAGE_CAPTURE")
+        photo_intent = Intent(prefix='start', action="android.intent.action.MAIN", component = "com.android.camera/.Camera")
         print 'making photo'
         self.send_intent(intent=photo_intent)
         time.sleep(2)
@@ -457,11 +463,11 @@ class Device(object):
         #self.get_telnet().run_cmd("sensor set magnetic-field %s:%s:%s" % (x, y, z))
 
     def set_continuous_gps(self, center_x, center_y, delta_x, delta_y):
-        import threading
-        gps_thread = threading.Thread(
+
+        self.gps_bat = threading.Thread(
             target=self.set_continuous_gps_blocked,
             args=(center_x, center_y, delta_x, delta_y))
-        gps_thread.start()
+        self.gps_bat.start()
         return True
 
     def set_continuous_gps_blocked(self, center_x, center_y, delta_x, delta_y):
@@ -481,11 +487,11 @@ class Device(object):
             time.sleep(1)
 
     def set_continious_longsensors(self):
-        import threading
+
         print 'starting'
-        gps_thread = threading.Thread(
-            target=self.set_continious_longsensors_blocked())
-        gps_thread.start()
+        self.long_sens = threading.Thread(
+            target=self.set_continious_longsensors_blockedpowte)
+        self.long_sens.start()
         return True
 
     def set_continious_longsensors_blocked(self):
